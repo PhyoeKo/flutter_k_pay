@@ -7,7 +7,7 @@ A Flutter KBZPay Plugin.
 // github
 flutter_kbz_pay:
     git:
-      url: https://github.com/KyawSoeW1n/flutter_kbz_pay.git
+      url: git://github.com/lostcixin/flutter_kbz_pay.git
       ref: master
 ```
 ## Usage
@@ -53,12 +53,6 @@ FlutterKbzPay.onPayStatus().listen((String data) {
       print('onPayStatus $data');
 });
 ```
-
-## For Development 
-Please use dev branch
-
-## For Production
-Please use main branch
 
 ## Getting Started
 For help getting started with Flutter, view our 

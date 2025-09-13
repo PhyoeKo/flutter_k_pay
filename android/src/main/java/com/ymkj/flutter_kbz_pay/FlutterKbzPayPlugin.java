@@ -23,16 +23,12 @@ import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler;
 import io.flutter.plugin.common.MethodChannel.Result;
-import io.flutter.plugin.common.PluginRegistry.Registrar;
 
 /**
  * FlutterKbzPayPlugin
  */
 public class FlutterKbzPayPlugin implements MethodCallHandler, FlutterPlugin, ActivityAware {
     private static EventChannel.EventSink sink;
-    /**
-     * Plugin registration.
-     */
 
     private Context context;
     private Activity activity;
@@ -42,61 +38,25 @@ public class FlutterKbzPayPlugin implements MethodCallHandler, FlutterPlugin, Ac
     private MethodChannel methodChannel;
     private EventChannel eventChannel;
 
-    public static void registerWith(Registrar registrar) {
-        final FlutterKbzPayPlugin instance = new FlutterKbzPayPlugin();
-        instance.onAttachedToEngine(registrar.context(), registrar.messenger());
-    }
-
-    // public static void registerWith(Registrar registrar) {
-    //     final MethodChannel methodChannel = new MethodChannel(registrar.messenger(), "flutter_kbz_pay");
-    //     final EventChannel eventchannel = new EventChannel(registrar.messenger(), "flutter_kbz_pay/pay_status");
-    //     this.context = registrar.activeContext();
-    //     methodChannel.setMethodCallHandler(this);
-    //     eventchannel.setStreamHandler(new EventChannel.StreamHandler() {
-    //         @Override
-    //         public void onListen(Object o, EventChannel.EventSink eventSink) {
-    //             SetSink(eventSink);
-    //         }
-
-    //         @Override
-    //         public void onCancel(Object o) {
-
-    //         }
-    //     });
-    // }
-
     @Override
-    public void onAttachedToEngine(FlutterPluginBinding binding) {
-        onAttachedToEngine(binding.getApplicationContext(), binding.getBinaryMessenger());
+    public void onAttachedToEngine(@NonNull FlutterPluginBinding binding) {
+        setupChannels(binding.getApplicationContext(), binding.getBinaryMessenger());
     }
 
     @Override
-    public void onAttachedToActivity(ActivityPluginBinding activityPluginBinding) {
-        // TODO: your plugin is now attached to an Activity
-        this.activity = activityPluginBinding.getActivity();
+    public void onDetachedFromEngine(@NonNull FlutterPluginBinding binding) {
+        teardownChannels();
+        context = null;
     }
 
-    @Override
-    public void onDetachedFromActivityForConfigChanges() {
-
-    }
-
-    @Override
-    public void onReattachedToActivityForConfigChanges(@NonNull ActivityPluginBinding activityPluginBinding) {
-
-    }
-
-    @Override
-    public void onDetachedFromActivity() {
-
-    }
-
-    private void onAttachedToEngine(Context applicationContext, BinaryMessenger messenger) {
+    private void setupChannels(Context applicationContext, BinaryMessenger messenger) {
         this.context = applicationContext;
-        final MethodChannel methodChannel = new MethodChannel(messenger, "flutter_kbz_pay");
-        final EventChannel eventchannel = new EventChannel(messenger, "flutter_kbz_pay/pay_status");
+        methodChannel = new MethodChannel(messenger, "flutter_kbz_pay");
+        eventChannel = new EventChannel(messenger, "flutter_kbz_pay/pay_status");
+
         methodChannel.setMethodCallHandler(this);
-        eventchannel.setStreamHandler(new EventChannel.StreamHandler() {
+
+        eventChannel.setStreamHandler(new EventChannel.StreamHandler() {
             @Override
             public void onListen(Object o, EventChannel.EventSink eventSink) {
                 SetSink(eventSink);
@@ -104,14 +64,20 @@ public class FlutterKbzPayPlugin implements MethodCallHandler, FlutterPlugin, Ac
 
             @Override
             public void onCancel(Object o) {
-
+                sink = null;
             }
         });
     }
 
-    @Override
-    public void onDetachedFromEngine(FlutterPluginBinding binding) {
-        context = null;
+    private void teardownChannels() {
+        if (methodChannel != null) {
+            methodChannel.setMethodCallHandler(null);
+            methodChannel = null;
+        }
+        if (eventChannel != null) {
+            eventChannel.setStreamHandler(null);
+            eventChannel = null;
+        }
     }
 
     @Override
@@ -133,10 +99,12 @@ public class FlutterKbzPayPlugin implements MethodCallHandler, FlutterPlugin, Ac
     }
 
     public static void sendPayStatus(int status, String orderId) {
-        HashMap<String, Object> map = new HashMap();
-        map.put("status", status);
-        map.put("orderId", orderId);
-        sink.success(map);
+        if (sink != null) {
+            HashMap<String, Object> map = new HashMap<>();
+            map.put("status", status);
+            map.put("orderId", orderId);
+            sink.success(map);
+        }
     }
 
     private void createInstantStartPay(MethodCall call, Result result) {
@@ -155,7 +123,6 @@ public class FlutterKbzPayPlugin implements MethodCallHandler, FlutterPlugin, Ac
             }
         } catch (JSONException e) {
             e.printStackTrace();
-            return;
         }
     }
 
@@ -165,14 +132,11 @@ public class FlutterKbzPayPlugin implements MethodCallHandler, FlutterPlugin, Ac
             JSONObject params = new JSONObject(map);
             Log.v("createPay", params.toString());
             if (params.has("prepay_id") && params.has("merch_code") && params.has("appid") && params.has("sign_key")) {
-                String prepayId = null;
-                String merch_code = null;
-                String appid = null;
-                String sign_key = null;
-                prepayId = params.getString("prepay_id");
-                merch_code = params.getString("merch_code");
-                appid = params.getString("appid");
-                sign_key = params.getString("sign_key");
+                String prepayId = params.getString("prepay_id");
+                String merch_code = params.getString("merch_code");
+                String appid = params.getString("appid");
+                String sign_key = params.getString("sign_key");
+
                 buildOrderInfo(prepayId, merch_code, appid, sign_key);
                 KBZPay.startPay(this.activity, mOrderInfo, mSign, signType);
                 result.success("payStatus " + 0);
@@ -181,7 +145,6 @@ public class FlutterKbzPayPlugin implements MethodCallHandler, FlutterPlugin, Ac
             }
         } catch (JSONException e) {
             e.printStackTrace();
-            return;
         }
     }
 
@@ -207,5 +170,26 @@ public class FlutterKbzPayPlugin implements MethodCallHandler, FlutterPlugin, Ac
         double time = cal.getTimeInMillis() / 1000;
         Double d = Double.valueOf(time);
         return Integer.toString(d.intValue());
+    }
+
+    // ---- ActivityAware implementation ----
+    @Override
+    public void onAttachedToActivity(@NonNull ActivityPluginBinding binding) {
+        this.activity = binding.getActivity();
+    }
+
+    @Override
+    public void onDetachedFromActivityForConfigChanges() {
+        this.activity = null;
+    }
+
+    @Override
+    public void onReattachedToActivityForConfigChanges(@NonNull ActivityPluginBinding binding) {
+        this.activity = binding.getActivity();
+    }
+
+    @Override
+    public void onDetachedFromActivity() {
+        this.activity = null;
     }
 }
